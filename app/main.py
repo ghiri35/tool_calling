@@ -5,15 +5,17 @@ from contextlib import asynccontextmanager
 from .db import Base, engine, get_db, SessionLocal
 from .utils import end_chat_session, get_or_create_active_session, save_message
 from .chatbot_logic import ChatBot
-from .models import ChatSession, User, ChatMessage
+from .models import ChatSession, User, ChatMessage, Rule
 from sqlalchemy import desc
-from .schemas import AgentReply
+from .schemas import AgentReply,RuleCreate
 from .intent import detect_intent
 from fastapi.middleware.cors import CORSMiddleware
 #Base.metadata.drop_all(bind=engine)
-
-# Initialize DB tables (only needed once)
 Base.metadata.create_all(bind=engine)
+from .test import seed_orders
+seed_orders()
+# Initialize DB tables (only needed once)
+
 
 app = FastAPI()
 chatbot = ChatBot("hi")
@@ -46,6 +48,21 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
             detail="Invalid username or password"
         )
     return user
+
+
+
+@app.post("/rules/")
+def create_rule(rule: RuleCreate, db: Session = Depends(get_db)):
+    db_rule = Rule(
+        tool_name=rule.tool_name,
+        conditions=rule.condition_text,
+        on_deny_message=rule.on_deny_message,
+        escalate_after_retries=rule.escalate_after_retries
+    )
+    db.add(db_rule)
+    db.commit()
+    db.refresh(db_rule)
+    return {"message": "Rule created", "rule_id": db_rule.id}
 
 
 

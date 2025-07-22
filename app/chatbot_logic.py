@@ -22,11 +22,11 @@ class ChatBot:
         self.OLLAMA_API = "http://localhost:11434/api/generate"
         self.prompt = get_dynamic_prompt(user_input) + f"\nUser: {user_input}\nAI:"
 
-    def call_mistral(self,prompt: str) -> str:
+    def call_llama3(self,prompt: str) -> str:
         response = requests.post(
             self.OLLAMA_API,
             json={
-                "model": "mistral",
+                "model": "llama3",
                 "prompt": prompt,
                 "stream": False
             }
@@ -41,10 +41,10 @@ class ChatBot:
         args = match.group(2)
         return func_name, args
         
-    def get_response(self,user_input):
+    def get_response(self,user_input,retry_count=0,max_retries=2):
 
         prompt = get_dynamic_prompt(user_input) + f"\nUser: {user_input}\nAI:"
-        response = self.call_mistral(prompt)
+        response = self.call_llama3(prompt)
         print("🤖 Model Response:", response)
 
         if "send_email" in response:
@@ -54,6 +54,7 @@ class ChatBot:
                 to_email = (re.search(r'to_email\s*=\s*"([^"]+)"', response)).group(1)
                 subject = (re.search(r'subject\s*=\s*"([^"]+)"', response)).group(1)
                 content = re.search(r'content\s*=\s*"((?:.|\n)*?)(?:Best regards,)', response).group(1).strip()
+                print(f"📧 Email: {to_email}")
                 if not to_email:
                     return None
 
@@ -62,13 +63,23 @@ class ChatBot:
                 return f"Email sent to {to_email}"
 
             except Exception as e:
-                print(f"❌ Failed to parse function call: {e}")
-                return None
+                print(f"❌ Failed to parse email response: {e}")
+                if retry_count < max_retries:
+                    print(f"🔄 Retrying LLM email parse (attempt {retry_count + 1})...")
+                    return self.get_response(user_input, retry_count + 1, max_retries)
+                return "Failed to send email after retries."
             
         func_name, args_str = self.extract_function_call(response)
         print(args_str)
         if not func_name:
-            return response
+            if retry_count < max_retries:
+                print("🔄 Retrying...")
+                for key, func in available_funcs.items():
+                    if key in response.lower():
+                        return self.get_response(user_input, retry_count + 1, max_retries)
+            else:
+                return response
+            
 
 
         resolved_func = resolve_function_name(func_name)

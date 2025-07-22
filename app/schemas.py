@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
+from typing import List, Optional, Dict, Any
+
 # Base user schema
 class UserBase(BaseModel):
     username: str
@@ -39,3 +41,17 @@ class AgentReply(BaseModel):
     session_id: str
     content: str
     user_id: int
+
+
+
+
+class Condition(BaseModel):
+    field: str             # e.g. "order_age_hours"
+    operator: str          # e.g. "<"
+    value: Any             # e.g. 24
+
+class RuleCreate(BaseModel):
+    tool_name: str
+    conditions: str
+    on_deny_message: Optional[str] = None
+    escalate_after_retries: int = 2
